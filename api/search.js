@@ -29,8 +29,18 @@ async function handler(req, res) {
       provider,
       keyword: '',
       page: 1,
-      data: { songs: [] },
-      totalCount: 0,
+      data: { songs: [], totalCount: 0 },
+    })
+  }
+
+  // Only spotify provider is supported (uses NCM API)
+  if (provider !== 'spotify') {
+    return res.json({
+      searchSuccess: false,
+      provider,
+      keyword,
+      page: Number(page),
+      data: { songs: [], totalCount: 0 },
     })
   }
 
@@ -49,8 +59,7 @@ async function handler(req, res) {
         provider,
         keyword,
         page: Number(page),
-        data: { songs: [] },
-        totalCount: 0,
+        data: { songs: [], totalCount: 0 },
       })
     }
 
@@ -62,8 +71,7 @@ async function handler(req, res) {
       provider,
       keyword,
       page: Number(page),
-      data: { songs },
-      totalCount,
+      data: { songs, totalCount },
     })
   } catch (err) {
     console.error('Search API error:', err)
@@ -72,8 +80,7 @@ async function handler(req, res) {
       provider,
       keyword,
       page: Number(page),
-      data: { songs: [] },
-      totalCount: 0,
+      data: { songs: [], totalCount: 0 },
     })
   }
 }
