@@ -29,10 +29,18 @@ export default defineConfig({
       output: {
         // 手动分包：将第三方库分离到独立的chunk中
         // 这样可以更好地利用浏览器缓存，当业务代码更新时，第三方库不需要重新下载
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'antd-vendor': ['antd'],
-          'icons-vendor': ['lucide-react'],
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) {
+              return 'react-vendor';
+            }
+            if (id.includes('antd')) {
+              return 'antd-vendor';
+            }
+            if (id.includes('lucide-react')) {
+              return 'icons-vendor';
+            }
+          }
         },
         // 文件命名规则：包含hash值用于缓存控制
         chunkFileNames: 'assets/js/[name]-[hash].js', // 代码分割的chunk文件
