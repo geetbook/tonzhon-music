@@ -102,7 +102,7 @@ function Player() {
         setPlayerMessage('Getting source...')
         fetch(`/api/p/${songInPlayer.newId}`)
           .then((res) => res.json())
-          .then(({ success, data }) => {
+          .then(({ success, data, message, needLogin }) => {
             if (success && data) {
               setSongSource(data)
               setSourceGettingStatus('success')
@@ -110,10 +110,19 @@ function Player() {
               setSongSource(songInPlayer.mp3Url)
               setSourceGettingStatus('success')
             } else {
-              throw new Error('No source')
+              if (needLogin) {
+                setSourceGettingStatus('failed')
+                setPlayerMessage(message || '需要登录后才能播放')
+                message.warning(`${message || '需要登录后才能播放'} <${songInPlayer.name}>`)
+              } else {
+                setSourceGettingStatus('failed')
+                setPlayerMessage(message || 'Failed to get source.')
+                message.info(`${message || '无法播放'} <${songInPlayer.name}>`)
+              }
+              onAudioEnded()
             }
           })
-          .catch((err) => {
+          .catch(() => {
             if (songInPlayer.mp3Url) {
               setSongSource(songInPlayer.mp3Url)
               setSourceGettingStatus('success')
