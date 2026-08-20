@@ -4,19 +4,27 @@ function toHttps(url) {
   return url ? url.replace(/^http:\/\//, 'https://') : ''
 }
 
+function buildCoverUrl(album) {
+  if (!album) return ''
+  if (album.picUrl) return toHttps(album.picUrl)
+  if (album.picId) return `https://p3.music.126.net/${album.picId}.jpg`
+  return ''
+}
+
 function mapSong(ncmSong) {
   return {
     newId: String(ncmSong.id),
     id: ncmSong.id,
     name: ncmSong.name,
     alias: ncmSong.alias?.[0] || '',
-    cover: toHttps(ncmSong.album?.picUrl),
+    cover: buildCoverUrl(ncmSong.album),
     artists: (ncmSong.artists || []).map((a) => ({
       id: a.id,
       name: a.name,
     })),
     duration: ncmSong.duration,
     searchSources: { netease: true },
+    mp3Url: toHttps(ncmSong.mp3Url || ncmSong.hMusic?.url || ''),
   }
 }
 

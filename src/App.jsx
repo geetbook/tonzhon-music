@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Header from './components/Header'
 import Player from './components/player/player'
 import ListenlistWindow from '@/components/listenlist-window/ListenlistWindow'
+import SignInModal from './components/SignInModal'
 import ErrorBoundary from './components/ErrorBoundary'
 import Loading from '@/components/ui/loading'
 import { SongSourceModalProvider } from '@/contexts/SongSourceModalContext'
@@ -54,6 +55,7 @@ function App() {
               </Content>
               <Player />
               {isListenlistOpen && <ListenlistWindow />}
+              <SignInModal />
             </Layout>
           </ConfigProvider>
         </SongSourceModalProvider>

@@ -72,9 +72,6 @@ export const SearchProvider = ({ children }) => {
       try {
         const response = await fetch(
           `/api/search?provider=${provider}&keyword=${encodeURIComponent(keyword)}`,
-          {
-            credentials: 'include',
-          }
         )
         const json = await response.json()
         

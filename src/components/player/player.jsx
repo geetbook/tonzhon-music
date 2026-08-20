@@ -96,23 +96,29 @@ function Player() {
         audioRef.current.pause()
         setSourceGettingStatus('getting')
         setPlayerMessage('Getting source...')
-        // document.title = 'Getting source...';
         fetch(`/api/p/${songInPlayer.newId}`)
           .then((res) => res.json())
           .then(({ success, data }) => {
-            if (success) {
+            if (success && data) {
               setSongSource(data)
+              setSourceGettingStatus('success')
+            } else if (songInPlayer.mp3Url) {
+              setSongSource(songInPlayer.mp3Url)
               setSourceGettingStatus('success')
             } else {
               throw new Error('No source')
             }
           })
           .catch((err) => {
-            setSourceGettingStatus('failed')
-            setPlayerMessage('Failed to get source.')
-            // document.title = 'Failed to get source.';
-            message.info(`无法播放 <${songInPlayer.name}>`)
-            onAudioEnded()
+            if (songInPlayer.mp3Url) {
+              setSongSource(songInPlayer.mp3Url)
+              setSourceGettingStatus('success')
+            } else {
+              setSourceGettingStatus('failed')
+              setPlayerMessage('Failed to get source.')
+              message.info(`无法播放 <${songInPlayer.name}>`)
+              onAudioEnded()
+            }
           })
       }
     }
