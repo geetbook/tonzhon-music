@@ -10,19 +10,22 @@ function SignInModal() {
 
   const [qrKey, setQrKey] = useState('')
   const [qrUrl, setQrUrl] = useState('')
-  const [qrImgUrl, setQrImgUrl] = useState('')
+  const [qrImg, setQrImg] = useState('')
   const [status, setStatus] = useState('idle') // idle, loading, waiting, scanned, expired, confirmed, error
   const [errorMsg, setErrorMsg] = useState('')
   const pollingRef = useRef(null)
+  const autoRefreshRef = useRef(null)
+  const generateRef = useRef(null)
+  const fetchUserInfoRef = useRef(null)
 
   const generateQRCode = useCallback(async () => {
     setStatus('loading')
     setErrorMsg('')
-    setQrImgUrl('')
+    setQrImg('')
 
     try {
       // Step 1: Get QR key
-      const keyRes = await fetch('/api/login/qr-key')
+      const keyRes = await fetch('/api/login/qr-key', { credentials: 'include' })
       const keyData = await keyRes.json()
 
       if (!keyData.success) {
@@ -32,8 +35,8 @@ function SignInModal() {
       const key = keyData.key
       setQrKey(key)
 
-      // Step 2: Create QR code
-      const createRes = await fetch(`/api/login/qr-create?key=${key}`)
+      // Step 2: Create QR code with qrimg=1 to get base64 image
+      const createRes = await fetch(`/api/login/qr-create?key=${key}`, { credentials: 'include' })
       const createData = await createRes.json()
 
       if (!createData.success) {
@@ -41,9 +44,10 @@ function SignInModal() {
       }
 
       setQrUrl(createData.qrurl)
-      // Use QR server API to generate image
-      const imgUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(createData.qrurl)}&size=200x200&margin=10`
-      setQrImgUrl(imgUrl)
+      // Use base64 image from NCM API directly
+      if (createData.qrimg) {
+        setQrImg(createData.qrimg)
+      }
       setStatus('waiting')
 
       // Start polling
@@ -55,57 +59,12 @@ function SignInModal() {
     }
   }, [])
 
-  const startPolling = useCallback((key) => {
-    // Clear previous polling
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current)
-    }
-
-    let count = 0
-    const maxAttempts = 60 // 60 * 3 = 180 seconds max
-
-    pollingRef.current = setInterval(async () => {
-      count++
-      if (count > maxAttempts) {
-        clearInterval(pollingRef.current)
-        setStatus('expired')
-        setErrorMsg('二维码已过期，请重新生成')
-        return
-      }
-
-      try {
-        const res = await fetch(`/api/login/qr-check?key=${key}`)
-        const data = await res.json()
-
-        if (!data.success) {
-          throw new Error('Failed to check QR status')
-        }
-
-        if (data.status === 'scanned') {
-          setStatus('scanned')
-        } else if (data.status === 'confirmed') {
-          clearInterval(pollingRef.current)
-          setStatus('confirmed')
-          // Login successful, fetch user info
-          fetchUserInfo()
-        } else if (data.status === 'expired') {
-          clearInterval(pollingRef.current)
-          setStatus('expired')
-          setErrorMsg('二维码已过期，请重新生成')
-        }
-        // waiting: continue polling
-      } catch (err) {
-        console.error('QR check error:', err)
-        clearInterval(pollingRef.current)
-        setStatus('error')
-        setErrorMsg('检查二维码状态失败')
-      }
-    }, 3000)
-  }, [])
+  // Keep generateQRCode in ref for use in polling
+  generateRef.current = generateQRCode
 
   const fetchUserInfo = useCallback(async () => {
     try {
-      const res = await fetch('/api/login/status')
+      const res = await fetch('/api/login/status', { credentials: 'include' })
       const data = await res.json()
 
       if (data.success && data.isSignedIn) {
@@ -127,6 +86,67 @@ function SignInModal() {
     }
   }, [signIn])
 
+  // Keep fetchUserInfo in ref for use in polling
+  fetchUserInfoRef.current = fetchUserInfo
+
+  const startPolling = useCallback((key) => {
+    // Clear previous polling
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current)
+    }
+
+    // Clear auto refresh timer
+    if (autoRefreshRef.current) {
+      clearTimeout(autoRefreshRef.current)
+    }
+
+    let count = 0
+    const maxAttempts = 100 // 100 * 3 = 300 seconds max (5 minutes)
+
+    pollingRef.current = setInterval(async () => {
+      count++
+      if (count > maxAttempts) {
+        clearInterval(pollingRef.current)
+        setStatus('expired')
+        setErrorMsg('二维码已过期，请点击重新生成')
+        return
+      }
+
+      try {
+        const res = await fetch(`/api/login/qr-check?key=${key}`, { credentials: 'include' })
+        const data = await res.json()
+
+        if (!data.success) {
+          throw new Error('Failed to check QR status')
+        }
+
+        if (data.status === 'scanned') {
+          setStatus('scanned')
+        } else if (data.status === 'confirmed') {
+          clearInterval(pollingRef.current)
+          setStatus('confirmed')
+          // Login successful, fetch user info
+          fetchUserInfoRef.current?.()
+        } else if (data.status === 'expired') {
+          clearInterval(pollingRef.current)
+          setStatus('expired')
+          setErrorMsg('二维码已过期，请点击重新生成')
+        }
+        // waiting: continue polling
+      } catch (err) {
+        console.error('QR check error:', err)
+        clearInterval(pollingRef.current)
+        setStatus('error')
+        setErrorMsg('检查二维码状态失败')
+      }
+    }, 3000)
+
+    // Auto refresh QR code every 2 minutes if not scanned
+    autoRefreshRef.current = setTimeout(() => {
+      generateRef.current?.()
+    }, 120000) // 2 minutes
+  }, [])
+
   useEffect(() => {
     if (isOpen) {
       generateQRCode()
@@ -135,15 +155,21 @@ function SignInModal() {
       if (pollingRef.current) {
         clearInterval(pollingRef.current)
       }
+      if (autoRefreshRef.current) {
+        clearTimeout(autoRefreshRef.current)
+      }
       setQrKey('')
       setQrUrl('')
-      setQrImgUrl('')
+      setQrImg('')
       setStatus('idle')
       setErrorMsg('')
     }
     return () => {
       if (pollingRef.current) {
         clearInterval(pollingRef.current)
+      }
+      if (autoRefreshRef.current) {
+        clearTimeout(autoRefreshRef.current)
       }
     }
   }, [isOpen, generateQRCode])
@@ -173,17 +199,22 @@ function SignInModal() {
           </div>
         )}
 
-        {(status === 'waiting' || status === 'scanned') && qrImgUrl && (
+        {(status === 'waiting' || status === 'scanned') && qrImg && (
           <div>
             <img
-              src={qrImgUrl}
+              src={qrImg}
               alt="登录二维码"
               style={{ width: 200, height: 200, margin: '0 auto', display: 'block' }}
             />
             {status === 'waiting' && (
-              <p style={{ marginTop: 16, color: '#666' }}>
-                请使用网易云音乐 App 扫码登录
-              </p>
+              <>
+                <p style={{ marginTop: 16, color: '#666' }}>
+                  请使用网易云音乐 App 扫码登录
+                </p>
+                <p style={{ color: '#999', fontSize: 12 }}>
+                  二维码将在 2 分钟后自动刷新
+                </p>
+              </>
             )}
             {status === 'scanned' && (
               <p style={{ marginTop: 16, color: '#52c41a' }}>

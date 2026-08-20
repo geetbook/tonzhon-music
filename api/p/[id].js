@@ -8,7 +8,12 @@ async function handler(req, res) {
   }
 
   try {
-    const upstream = await fetch(`${NCM_API}/song/url?id=${id}`)
+    // Get cookie from request headers
+    const cookie = req.headers.cookie || ''
+
+    const upstream = await fetch(`${NCM_API}/song/url?id=${id}`, {
+      headers: cookie ? { Cookie: cookie } : {},
+    })
     const json = await upstream.json()
 
     if (json.code !== 200 || !json.data?.length) {

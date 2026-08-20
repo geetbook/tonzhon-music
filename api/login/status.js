@@ -2,7 +2,12 @@ const NCM_API = 'https://api-enhanced-sooty-six.vercel.app'
 
 async function handler(req, res) {
   try {
-    const upstream = await fetch(`${NCM_API}/login/status`)
+    // Get cookie from request headers
+    const cookie = req.headers.cookie || ''
+
+    const upstream = await fetch(`${NCM_API}/login/status`, {
+      headers: cookie ? { Cookie: cookie } : {},
+    })
     const json = await upstream.json()
 
     if (json.code === 200 && json.data.account) {

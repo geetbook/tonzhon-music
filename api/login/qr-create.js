@@ -8,14 +8,21 @@ async function handler(req, res) {
   }
 
   try {
-    const upstream = await fetch(`${NCM_API}/login/qr/create?key=${key}`)
+    const upstream = await fetch(`${NCM_API}/login/qr/create?key=${key}&qrimg=1`)
     const json = await upstream.json()
 
     if (json.code === 200) {
+      const qrimg = json.data.qrimg
+      let imgUrl = ''
+
+      if (qrimg) {
+        imgUrl = qrimg
+      }
+
       return res.json({
         success: true,
         qrurl: json.data.qrurl,
-        qrimg: json.data.qrimg,
+        qrimg: imgUrl,
       })
     }
 

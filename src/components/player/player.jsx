@@ -100,7 +100,7 @@ function Player() {
         audioRef.current.pause()
         setSourceGettingStatus('getting')
         setPlayerMessage('Getting source...')
-        fetch(`/api/p/${songInPlayer.newId}`)
+        fetch(`/api/p/${songInPlayer.newId}`, { credentials: 'include' })
           .then((res) => res.json())
           .then(({ success, data, message, needLogin }) => {
             if (success && data) {

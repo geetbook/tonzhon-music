@@ -14,11 +14,11 @@ async function handler(req, res) {
     if (json.code === 200) {
       const cookie = json.cookie
       if (cookie) {
-        // Store the cookie in serverless function response for future use
+        // Set the cookie in response so browser saves it
+        res.setHeader('Set-Cookie', cookie.replace(/Path=\//g, 'Path=/; SameSite=Lax'))
         return res.json({
           success: true,
           status: 'confirmed',
-          cookie,
         })
       }
       return res.json({
