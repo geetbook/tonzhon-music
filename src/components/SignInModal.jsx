@@ -13,11 +13,17 @@ function SignInModal() {
   const [qrImg, setQrImg] = useState('')
   const [status, setStatus] = useState('idle')
   const [errorMsg, setErrorMsg] = useState('')
+  
   const pollingRef = useRef(null)
   const autoRefreshRef = useRef(null)
   const generateRef = useRef(null)
   const fetchUserInfoRef = useRef(null)
   const confirmedCookieRef = useRef(null)
+  const statusRef = useRef('idle')
+
+  useEffect(() => {
+    statusRef.current = status
+  }, [status])
 
   const cleanCookie = useCallback((cookieStr) => {
     if (!cookieStr) return ''
@@ -37,11 +43,63 @@ function SignInModal() {
     return fetch(url, { ...options, headers })
   }, [])
 
+  const fetchUserInfo = useCallback(async (cookie) => {
+    try {
+      let cleanC = ''
+      if (cookie) {
+        cleanC = cleanCookie(cookie)
+        setNcmCookie(cleanC)
+      }
+
+      const res = await fetchWithCookie('/api/login/status')
+      const data = await res.json()
+
+      if (data.success && data.isSignedIn) {
+        const finalCookie = getNcmCookie()
+        signIn({
+          username: data.user.username,
+          email: '',
+          playlists: [],
+          collectedPlaylists: [],
+          ncmCookie: finalCookie || cleanC,
+        })
+        message.success('登录成功！')
+        confirmedCookieRef.current = null
+        if (pollingRef.current) {
+          clearInterval(pollingRef.current)
+          pollingRef.current = null
+        }
+        if (autoRefreshRef.current) {
+          clearTimeout(autoRefreshRef.current)
+          autoRefreshRef.current = null
+        }
+        setIsOpen(false)
+      } else {
+        throw new Error('登录验证失败，请重试')
+      }
+    } catch (err) {
+      console.error('Fetch user info error:', err)
+      setErrorMsg(err.message || '登录验证失败')
+      setStatus('error')
+    }
+  }, [signIn, fetchWithCookie, cleanCookie, setIsOpen])
+
+  fetchUserInfoRef.current = fetchUserInfo
+
   const generateQRCode = useCallback(async () => {
     setStatus('loading')
     setErrorMsg('')
     setQrImg('')
     confirmedCookieRef.current = null
+
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current)
+      pollingRef.current = null
+    }
+    if (autoRefreshRef.current) {
+      clearTimeout(autoRefreshRef.current)
+      autoRefreshRef.current = null
+    }
 
     try {
       const keyRes = await fetch('/api/login/qr-key')
@@ -76,48 +134,7 @@ function SignInModal() {
 
   generateRef.current = generateQRCode
 
-  const fetchUserInfo = useCallback(async (cookie) => {
-    try {
-      if (cookie) {
-        const cleanC = cleanCookie(cookie)
-        setNcmCookie(cleanC)
-      }
-
-      const res = await fetchWithCookie('/api/login/status')
-      const data = await res.json()
-
-      if (data.success && data.isSignedIn) {
-        const finalCookie = getNcmCookie()
-        signIn({
-          username: data.user.username,
-          email: '',
-          playlists: [],
-          collectedPlaylists: [],
-          ncmCookie: finalCookie,
-        })
-        message.success('登录成功！')
-        confirmedCookieRef.current = null
-        handleClose()
-      } else {
-        throw new Error('登录验证失败，请重试')
-      }
-    } catch (err) {
-      console.error('Fetch user info error:', err)
-      setErrorMsg(err.message || '登录验证失败')
-      setStatus('error')
-    }
-  }, [signIn, fetchWithCookie, cleanCookie])
-
-  fetchUserInfoRef.current = fetchUserInfo
-
   const startPolling = useCallback((key) => {
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current)
-    }
-    if (autoRefreshRef.current) {
-      clearTimeout(autoRefreshRef.current)
-    }
-
     let count = 0
     const maxAttempts = 100
 
@@ -125,6 +142,7 @@ function SignInModal() {
       count++
       if (count > maxAttempts) {
         clearInterval(pollingRef.current)
+        pollingRef.current = null
         setStatus('expired')
         setErrorMsg('二维码已过期，请点击重新生成')
         return
@@ -141,9 +159,13 @@ function SignInModal() {
         if (data.status === 'scanned') {
           setStatus('scanned')
         } else if (data.status === 'confirmed') {
-          clearInterval(pollingRef.current)
+          if (pollingRef.current) {
+            clearInterval(pollingRef.current)
+            pollingRef.current = null
+          }
           if (autoRefreshRef.current) {
             clearTimeout(autoRefreshRef.current)
+            autoRefreshRef.current = null
           }
           setStatus('confirmed')
 
@@ -154,27 +176,34 @@ function SignInModal() {
 
           fetchUserInfoRef.current?.(cookie)
         } else if (data.status === 'expired') {
-          clearInterval(pollingRef.current)
+          if (pollingRef.current) {
+            clearInterval(pollingRef.current)
+            pollingRef.current = null
+          }
           if (autoRefreshRef.current) {
             clearTimeout(autoRefreshRef.current)
+            autoRefreshRef.current = null
           }
           setStatus('expired')
           setErrorMsg('二维码已过期，请点击重新生成')
         }
       } catch (err) {
         console.error('QR check error:', err)
-        clearInterval(pollingRef.current)
+        if (pollingRef.current) {
+          clearInterval(pollingRef.current)
+          pollingRef.current = null
+        }
         setStatus('error')
         setErrorMsg('检查二维码状态失败')
       }
     }, 3000)
 
     autoRefreshRef.current = setTimeout(() => {
-      if (status !== 'confirmed') {
+      if (statusRef.current !== 'confirmed') {
         generateRef.current?.()
       }
     }, 120000)
-  }, [status])
+  }, [])
 
   useEffect(() => {
     if (isOpen) {
@@ -182,9 +211,11 @@ function SignInModal() {
     } else {
       if (pollingRef.current) {
         clearInterval(pollingRef.current)
+        pollingRef.current = null
       }
       if (autoRefreshRef.current) {
         clearTimeout(autoRefreshRef.current)
+        autoRefreshRef.current = null
       }
       setQrKey('')
       setQrUrl('')
@@ -196,9 +227,11 @@ function SignInModal() {
     return () => {
       if (pollingRef.current) {
         clearInterval(pollingRef.current)
+        pollingRef.current = null
       }
       if (autoRefreshRef.current) {
         clearTimeout(autoRefreshRef.current)
+        autoRefreshRef.current = null
       }
     }
   }, [isOpen, generateQRCode])
@@ -206,9 +239,11 @@ function SignInModal() {
   const handleClose = () => {
     if (pollingRef.current) {
       clearInterval(pollingRef.current)
+      pollingRef.current = null
     }
     if (autoRefreshRef.current) {
       clearTimeout(autoRefreshRef.current)
+      autoRefreshRef.current = null
     }
     setIsOpen(false)
   }
