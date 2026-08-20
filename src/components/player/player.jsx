@@ -21,6 +21,8 @@ import {
   Square,
   Volume2 as VolumeIcon,
   XCircle,
+  Info,
+  MessageCircle,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import usePositionedMessage from '@/hooks/usePositionedMessage'
@@ -35,6 +37,7 @@ import PauseCircleFilled from '../icons/PauseCircleFilled'
 import PlayCircleFilled from '../icons/PlayCircleFilled'
 import SongWithCover from '../SongWithCover'
 import AddToPlaylist from '../song-item/AddToPlaylist'
+import SongPanel from '../SongPanel'
 import './player.css'
 
 function Player() {
@@ -64,6 +67,7 @@ function Player() {
   const [songDuration, setSongDuration] = useState(0)
   const [playProgress, setPlayProgress] = useState(0)
   const [audioCurrentTime, setAudioCurrentTime] = useState(0)
+  const [isSongPanelOpen, setIsSongPanelOpen] = useState(false)
 
   const isMountedRef = useRef(false)
   const audioRef = useRef(null)
@@ -380,7 +384,7 @@ function Player() {
             <Col span={7}>
               {songInPlayer && <SongWithCover song={songInPlayer} />}
             </Col>
-            <Col span={3}>
+            <Col span={5}>
               <Row justify="space-between">
                 <Col>
                   <IconLikeSong song={songInPlayer} />
@@ -390,6 +394,20 @@ function Player() {
                 </Col>
                 <Col>
                   <Download className="icon" onClick={onDownloadIconClick} />
+                </Col>
+                <Col>
+                  <Info
+                    className="icon"
+                    style={{ cursor: songInPlayer ? 'pointer' : 'not-allowed', opacity: songInPlayer ? 1 : 0.5 }}
+                    onClick={() => songInPlayer && setIsSongPanelOpen(true)}
+                  />
+                </Col>
+                <Col>
+                  <MessageCircle
+                    className="icon"
+                    style={{ cursor: songInPlayer ? 'pointer' : 'not-allowed', opacity: songInPlayer ? 1 : 0.5 }}
+                    onClick={() => songInPlayer && setIsSongPanelOpen(true)}
+                  />
                 </Col>
               </Row>
             </Col>
@@ -417,7 +435,7 @@ function Player() {
                     : iconNoSource}
               <SkipForward className="icon" onClick={onNextBtnClick} />
             </Col>
-            <Col span={10}>
+            <Col span={9}>
               <Row justify="space-between">
                 <Col>
                   <Dropdown
@@ -521,6 +539,14 @@ function Player() {
           </Row>
         </div>
       </div>
+      {songInPlayer && (
+        <SongPanel
+          open={isSongPanelOpen}
+          onClose={() => setIsSongPanelOpen(false)}
+          songId={songInPlayer.newId}
+          songName={songInPlayer.name}
+        />
+      )}
     </>
   )
 }
