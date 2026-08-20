@@ -8,8 +8,10 @@ async function handler(req, res) {
   }
 
   try {
-    // Get cookie from request headers
-    const cookie = req.headers.cookie || ''
+    // Get cookie from custom header (passed from frontend via localStorage)
+    const ncmCookie = req.headers['x-ncm-cookie'] || ''
+    // Fallback to regular cookie header
+    const cookie = ncmCookie || req.headers.cookie || ''
 
     const upstream = await fetch(`${NCM_API}/song/url?id=${id}`, {
       headers: cookie ? { Cookie: cookie } : {},

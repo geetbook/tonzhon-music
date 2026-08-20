@@ -1,7 +1,7 @@
 import { Modal, Button, Spin, message } from 'antd'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useSignInModalStore } from '@/stores/useSignInModalStore'
-import { useUserStore } from '@/stores/useUserStore'
+import { useUserStore, getNcmCookie, setNcmCookie } from '@/stores/useUserStore'
 
 function SignInModal() {
   const isOpen = useSignInModalStore((s) => s.isSignInModalOpen)
@@ -18,6 +18,16 @@ function SignInModal() {
   const generateRef = useRef(null)
   const fetchUserInfoRef = useRef(null)
 
+  // Helper to make API request with NCM cookie
+  const fetchWithCookie = useCallback(async (url, options = {}) => {
+    const cookie = getNcmCookie()
+    const headers = { ...options.headers }
+    if (cookie) {
+      headers['X-NCM-Cookie'] = cookie
+    }
+    return fetch(url, { ...options, headers })
+  }, [])
+
   const generateQRCode = useCallback(async () => {
     setStatus('loading')
     setErrorMsg('')
@@ -25,7 +35,7 @@ function SignInModal() {
 
     try {
       // Step 1: Get QR key
-      const keyRes = await fetch('/api/login/qr-key', { credentials: 'include' })
+      const keyRes = await fetch('/api/login/qr-key')
       const keyData = await keyRes.json()
 
       if (!keyData.success) {
@@ -35,8 +45,8 @@ function SignInModal() {
       const key = keyData.key
       setQrKey(key)
 
-      // Step 2: Create QR code with qrimg=1 to get base64 image
-      const createRes = await fetch(`/api/login/qr-create?key=${key}`, { credentials: 'include' })
+      // Step 2: Create QR code
+      const createRes = await fetch(`/api/login/qr-create?key=${key}`)
       const createData = await createRes.json()
 
       if (!createData.success) {
@@ -44,7 +54,6 @@ function SignInModal() {
       }
 
       setQrUrl(createData.qrurl)
-      // Use base64 image from NCM API directly
       if (createData.qrimg) {
         setQrImg(createData.qrimg)
       }
@@ -62,9 +71,15 @@ function SignInModal() {
   // Keep generateQRCode in ref for use in polling
   generateRef.current = generateQRCode
 
-  const fetchUserInfo = useCallback(async () => {
+  const fetchUserInfo = useCallback(async (cookie) => {
     try {
-      const res = await fetch('/api/login/status', { credentials: 'include' })
+      // Store the cookie
+      if (cookie) {
+        setNcmCookie(cookie)
+      }
+
+      // Fetch user info with the cookie
+      const res = await fetchWithCookie('/api/login/status')
       const data = await res.json()
 
       if (data.success && data.isSignedIn) {
@@ -73,6 +88,7 @@ function SignInModal() {
           email: '',
           playlists: [],
           collectedPlaylists: [],
+          ncmCookie: cookie || getNcmCookie(),
         })
         message.success('登录成功！')
         handleClose()
@@ -84,7 +100,7 @@ function SignInModal() {
       setErrorMsg(err.message || '登录验证失败')
       setStatus('error')
     }
-  }, [signIn])
+  }, [signIn, fetchWithCookie])
 
   // Keep fetchUserInfo in ref for use in polling
   fetchUserInfoRef.current = fetchUserInfo
@@ -113,7 +129,7 @@ function SignInModal() {
       }
 
       try {
-        const res = await fetch(`/api/login/qr-check?key=${key}`, { credentials: 'include' })
+        const res = await fetch(`/api/login/qr-check?key=${key}`)
         const data = await res.json()
 
         if (!data.success) {
@@ -125,8 +141,12 @@ function SignInModal() {
         } else if (data.status === 'confirmed') {
           clearInterval(pollingRef.current)
           setStatus('confirmed')
+          // Store the cookie from response
+          if (data.cookie) {
+            setNcmCookie(data.cookie)
+          }
           // Login successful, fetch user info
-          fetchUserInfoRef.current?.()
+          fetchUserInfoRef.current?.(data.cookie)
         } else if (data.status === 'expired') {
           clearInterval(pollingRef.current)
           setStatus('expired')

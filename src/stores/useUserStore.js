@@ -6,6 +6,7 @@ const initialState = {
   email: '',
   playlists: [],
   collectedPlaylists: [],
+  ncmCookie: '',
 }
 
 export const useUserStore = create((set, get) => ({
@@ -18,11 +19,34 @@ export const useUserStore = create((set, get) => ({
       email: data.email ?? '',
       playlists: data.playlists ?? [],
       collectedPlaylists: data.collectedPlaylists ?? [],
+      ncmCookie: data.ncmCookie ?? '',
     })
   },
 
   signOut: () => {
+    // Clear cookie from localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('ncmCookie')
+    }
     set(initialState)
+  },
+
+  setNcmCookie: (cookie) => {
+    // Store in localStorage for persistence
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('ncmCookie', cookie)
+    }
+    set({ ncmCookie: cookie })
+  },
+
+  getNcmCookie: () => {
+    // Get from store or localStorage
+    const storeCookie = get().ncmCookie
+    if (storeCookie) return storeCookie
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('ncmCookie') || ''
+    }
+    return ''
   },
 
   newPlaylist: (playlist) => {
@@ -60,4 +84,12 @@ export function signInUser(data) {
 
 export function signOutUser() {
   useUserStore.getState().signOut()
+}
+
+export function getNcmCookie() {
+  return useUserStore.getState().getNcmCookie()
+}
+
+export function setNcmCookie(cookie) {
+  useUserStore.getState().setNcmCookie(cookie)
 }

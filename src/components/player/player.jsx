@@ -30,6 +30,7 @@ import { useListenlistOpenStore } from '@/stores/useListenlistOpenStore'
 import { useListenlistStore } from '@/stores/useListenlistStore'
 import { useSongInPlayerStore } from '@/stores/useSongInPlayerStore'
 import { useSongSourceModal } from '@/contexts/SongSourceModalContext'
+import { getNcmCookie } from '@/stores/useUserStore'
 import onlyWhenUserIsSignedIn from '@/utils/only_when_user_is_signed_in'
 import toMinAndSec from '@/utils/toMinAndSec'
 import IconLikeSong from '../IconLikeSong'
@@ -100,7 +101,12 @@ function Player() {
         audioRef.current.pause()
         setSourceGettingStatus('getting')
         setPlayerMessage('Getting source...')
-        fetch(`/api/p/${songInPlayer.newId}`, { credentials: 'include' })
+        const cookie = getNcmCookie()
+        const headers = {}
+        if (cookie) {
+          headers['X-NCM-Cookie'] = cookie
+        }
+        fetch(`/api/p/${songInPlayer.newId}`, { headers })
           .then((res) => res.json())
           .then(({ success, data, message, needLogin }) => {
             if (success && data) {

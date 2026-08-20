@@ -11,19 +11,20 @@ async function handler(req, res) {
     const upstream = await fetch(`${NCM_API}/login/qr/check?key=${key}`)
     const json = await upstream.json()
 
-    if (json.code === 200) {
-      const cookie = json.cookie
-      if (cookie) {
-        // Set the cookie in response so browser saves it
-        res.setHeader('Set-Cookie', cookie.replace(/Path=\//g, 'Path=/; SameSite=Lax'))
-        return res.json({
-          success: true,
-          status: 'confirmed',
-        })
-      }
+    // NCM API status codes:
+    // 800: QR code expired
+    // 801: Waiting for scan
+    // 802: QR code scanned, waiting for confirmation
+    // 803: Login successful, cookie returned
+    // 200: Sometimes returned on success with account info
+
+    if (json.code === 803 || json.code === 200) {
+      // Login successful - return the cookie in the response
+      const cookie = json.cookie || ''
       return res.json({
         success: true,
-        status: 'expired',
+        status: 'confirmed',
+        cookie: cookie,
       })
     } else if (json.code === 801) {
       return res.json({
@@ -35,7 +36,7 @@ async function handler(req, res) {
         success: true,
         status: 'scanned',
       })
-    } else if (json.code === 803) {
+    } else if (json.code === 800 || json.code === 803) {
       return res.json({
         success: true,
         status: 'expired',
