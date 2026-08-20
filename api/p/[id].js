@@ -18,14 +18,15 @@ async function handler(req, res) {
     const songData = json.data[0]
 
     if (!songData.url || songData.code !== 200) {
-      if (songData.cannotListenReason === 1) {
+      const reason = songData.freeTrialPrivilege?.cannotListenReason
+      if (reason === 1) {
         return res.json({
           success: false,
-          message: '这首歌需要登录后才能播放',
+          message: '这首歌需要登录后才能播放，请先扫码登录',
           needLogin: true,
         })
       }
-      if (songData.cannotListenReason === 2) {
+      if (reason === 2) {
         return res.json({
           success: false,
           message: '这首歌需要付费或VIP才能播放',
