@@ -27,7 +27,7 @@ function SongPanel({ open, onClose, songId, songName }) {
   const fetchDetail = async () => {
     setDetailLoading(true)
     try {
-      const res = await fetch(`/api/song-detail?id=${songId}`)
+      const res = await fetch(`/api/song/detail?id=${songId}`)
       const data = await res.json()
       if (data.success) {
         setDetail(data.data)
@@ -45,7 +45,7 @@ function SongPanel({ open, onClose, songId, songName }) {
   const fetchComments = async () => {
     setCommentsLoading(true)
     try {
-      const res = await fetch(`/api/song-comments?id=${songId}&limit=20`)
+      const res = await fetch(`/api/song/comments?id=${songId}&limit=20`)
       const data = await res.json()
       if (data.success) {
         setComments(data.data.comments)
