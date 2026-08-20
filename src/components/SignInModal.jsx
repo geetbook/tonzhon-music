@@ -11,17 +11,26 @@ function SignInModal() {
   const [qrKey, setQrKey] = useState('')
   const [qrUrl, setQrUrl] = useState('')
   const [qrImg, setQrImg] = useState('')
-  const [status, setStatus] = useState('idle') // idle, loading, waiting, scanned, expired, confirmed, error
+  const [status, setStatus] = useState('idle')
   const [errorMsg, setErrorMsg] = useState('')
   const pollingRef = useRef(null)
   const autoRefreshRef = useRef(null)
   const generateRef = useRef(null)
   const fetchUserInfoRef = useRef(null)
+  const confirmedCookieRef = useRef(null)
 
-  // Helper to make API request with NCM cookie
+  const cleanCookie = useCallback((cookieStr) => {
+    if (!cookieStr) return ''
+    return cookieStr
+      .split(';')
+      .map(part => part.trim())
+      .filter(part => part && !part.startsWith('Max-Age=') && !part.startsWith('Expires=') && !part.startsWith('Path=') && !part.startsWith('Domain=') && !part.startsWith('Secure') && !part.startsWith('HttpOnly') && part.includes('='))
+      .join('; ')
+  }, [])
+
   const fetchWithCookie = useCallback(async (url, options = {}) => {
     const cookie = getNcmCookie()
-    const headers = { ...options.headers }
+    const headers = { ...(options.headers || {}) }
     if (cookie) {
       headers['X-NCM-Cookie'] = cookie
     }
@@ -32,25 +41,24 @@ function SignInModal() {
     setStatus('loading')
     setErrorMsg('')
     setQrImg('')
+    confirmedCookieRef.current = null
 
     try {
-      // Step 1: Get QR key
       const keyRes = await fetch('/api/login/qr-key')
       const keyData = await keyRes.json()
 
       if (!keyData.success) {
-        throw new Error('Failed to generate QR key')
+        throw new Error('获取二维码密钥失败')
       }
 
       const key = keyData.key
       setQrKey(key)
 
-      // Step 2: Create QR code
       const createRes = await fetch(`/api/login/qr-create?key=${key}`)
       const createData = await createRes.json()
 
       if (!createData.success) {
-        throw new Error('Failed to create QR code')
+        throw new Error('生成二维码失败')
       }
 
       setQrUrl(createData.qrurl)
@@ -58,8 +66,6 @@ function SignInModal() {
         setQrImg(createData.qrimg)
       }
       setStatus('waiting')
-
-      // Start polling
       startPolling(key)
     } catch (err) {
       console.error('Generate QR error:', err)
@@ -68,56 +74,52 @@ function SignInModal() {
     }
   }, [])
 
-  // Keep generateQRCode in ref for use in polling
   generateRef.current = generateQRCode
 
   const fetchUserInfo = useCallback(async (cookie) => {
     try {
-      // Store the cookie
       if (cookie) {
-        setNcmCookie(cookie)
+        const cleanC = cleanCookie(cookie)
+        setNcmCookie(cleanC)
       }
 
-      // Fetch user info with the cookie
       const res = await fetchWithCookie('/api/login/status')
       const data = await res.json()
 
       if (data.success && data.isSignedIn) {
+        const finalCookie = getNcmCookie()
         signIn({
           username: data.user.username,
           email: '',
           playlists: [],
           collectedPlaylists: [],
-          ncmCookie: cookie || getNcmCookie(),
+          ncmCookie: finalCookie,
         })
         message.success('登录成功！')
+        confirmedCookieRef.current = null
         handleClose()
       } else {
-        throw new Error('获取用户信息失败')
+        throw new Error('登录验证失败，请重试')
       }
     } catch (err) {
       console.error('Fetch user info error:', err)
       setErrorMsg(err.message || '登录验证失败')
       setStatus('error')
     }
-  }, [signIn, fetchWithCookie])
+  }, [signIn, fetchWithCookie, cleanCookie])
 
-  // Keep fetchUserInfo in ref for use in polling
   fetchUserInfoRef.current = fetchUserInfo
 
   const startPolling = useCallback((key) => {
-    // Clear previous polling
     if (pollingRef.current) {
       clearInterval(pollingRef.current)
     }
-
-    // Clear auto refresh timer
     if (autoRefreshRef.current) {
       clearTimeout(autoRefreshRef.current)
     }
 
     let count = 0
-    const maxAttempts = 100 // 100 * 3 = 300 seconds max (5 minutes)
+    const maxAttempts = 100
 
     pollingRef.current = setInterval(async () => {
       count++
@@ -133,26 +135,32 @@ function SignInModal() {
         const data = await res.json()
 
         if (!data.success) {
-          throw new Error('Failed to check QR status')
+          throw new Error('检查二维码状态失败')
         }
 
         if (data.status === 'scanned') {
           setStatus('scanned')
         } else if (data.status === 'confirmed') {
           clearInterval(pollingRef.current)
-          setStatus('confirmed')
-          // Store the cookie from response
-          if (data.cookie) {
-            setNcmCookie(data.cookie)
+          if (autoRefreshRef.current) {
+            clearTimeout(autoRefreshRef.current)
           }
-          // Login successful, fetch user info
-          fetchUserInfoRef.current?.(data.cookie)
+          setStatus('confirmed')
+
+          const cookie = data.cookie || data.rawCookie || ''
+          if (cookie) {
+            confirmedCookieRef.current = cookie
+          }
+
+          fetchUserInfoRef.current?.(cookie)
         } else if (data.status === 'expired') {
           clearInterval(pollingRef.current)
+          if (autoRefreshRef.current) {
+            clearTimeout(autoRefreshRef.current)
+          }
           setStatus('expired')
           setErrorMsg('二维码已过期，请点击重新生成')
         }
-        // waiting: continue polling
       } catch (err) {
         console.error('QR check error:', err)
         clearInterval(pollingRef.current)
@@ -161,17 +169,17 @@ function SignInModal() {
       }
     }, 3000)
 
-    // Auto refresh QR code every 2 minutes if not scanned
     autoRefreshRef.current = setTimeout(() => {
-      generateRef.current?.()
-    }, 120000) // 2 minutes
-  }, [])
+      if (status !== 'confirmed') {
+        generateRef.current?.()
+      }
+    }, 120000)
+  }, [status])
 
   useEffect(() => {
     if (isOpen) {
       generateQRCode()
     } else {
-      // Cleanup
       if (pollingRef.current) {
         clearInterval(pollingRef.current)
       }
@@ -183,6 +191,7 @@ function SignInModal() {
       setQrImg('')
       setStatus('idle')
       setErrorMsg('')
+      confirmedCookieRef.current = null
     }
     return () => {
       if (pollingRef.current) {
@@ -195,6 +204,12 @@ function SignInModal() {
   }, [isOpen, generateQRCode])
 
   const handleClose = () => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current)
+    }
+    if (autoRefreshRef.current) {
+      clearTimeout(autoRefreshRef.current)
+    }
     setIsOpen(false)
   }
 
