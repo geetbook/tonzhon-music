@@ -1,6 +1,6 @@
 const NCM_API = 'https://api-enhanced-sooty-six.vercel.app'
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method === 'POST') {
     try {
       const { song } = req.body || {}
@@ -51,3 +51,6 @@ export default async function handler(req, res) {
 
   return res.status(405).json({ error: 'Method not allowed' })
 }
+
+module.exports = handler
+module.exports.default = handler

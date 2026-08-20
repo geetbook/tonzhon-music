@@ -20,7 +20,7 @@ function mapSong(ncmSong) {
   }
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   const { keyword, provider = 'spotify', page = 1 } = req.query
 
   if (!keyword) {
@@ -77,3 +77,6 @@ export default async function handler(req, res) {
     })
   }
 }
+
+module.exports = handler
+module.exports.default = handler

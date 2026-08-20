@@ -1,7 +1,6 @@
 const NCM_API = 'https://api-enhanced-sooty-six.vercel.app'
 
-export default async function handler(req, res) {
-  // Handle song playback URL requests
+async function handler(req, res) {
   const { id } = req.query
 
   if (!id) {
@@ -33,3 +32,6 @@ export default async function handler(req, res) {
     return res.status(500).json({ success: false })
   }
 }
+
+module.exports = handler
+module.exports.default = handler

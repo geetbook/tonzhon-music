@@ -20,7 +20,7 @@ function mapSong(ncmSong) {
   }
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   try {
     const upstream = await fetch(`${NCM_API}/top/song?type=0`)
     const json = await upstream.json()
@@ -37,3 +37,6 @@ export default async function handler(req, res) {
     return res.status(500).json({ success: false, songs: [] })
   }
 }
+
+module.exports = handler
+module.exports.default = handler
